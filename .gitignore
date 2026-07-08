@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+data/raw_pdfs/*
+data/markdown/*
+data/chunks/*
+data/qdrant/*
+
+!data/raw_pdfs/.gitkeep
+!data/markdown/.gitkeep
+!data/chunks/.gitkeep
+!data/qdrant/.gitkeep
