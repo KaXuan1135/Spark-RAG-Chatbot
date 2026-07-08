@@ -232,6 +232,8 @@ examples = [
     "What is the annual outpatient medical claim limit for a newly hired engineer in Kuala Lumpur on probation?",
     "If an employee at Astra Malaysia drives 650 kilometers for an approved corporate business trip, how much reimbursement can they claim?",
     "Can Malaysian GLC payloads fall back to Anthropic Claude if h100astra is down?",
+    "During an S2 disaster recovery event in Kuala Lumpur, we need to activate our standby server h100backup-02 to host our Tier-1 client inference endpoints. What hardware limitation on this standby server violates our standard GPU deployment policy, and whose approval do we need to bypass this limitation?",
+    "What are the differences in the preemption rules between Tier-2 and Tier-3 workloads on our GPU platform?",
 ]
 
 selected = st.selectbox("Example questions", examples)
