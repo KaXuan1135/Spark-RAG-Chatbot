@@ -29,6 +29,14 @@ st.markdown(
         font-size: 1.05rem;
         line-height: 1.15;
     }
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    #MainMenu,
+    footer {
+        visibility: hidden;
+        height: 0;
+    }
     </style>
     """,
     unsafe_allow_html=True,
