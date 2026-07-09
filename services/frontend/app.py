@@ -186,21 +186,6 @@ def render_sidebar() -> str:
         else:
             page = st.radio("Page", ["Chat", "Documents"], label_visibility="collapsed")
 
-        st.divider()
-        st.subheader("Connection")
-        st.code(API_BASE_URL, language="text")
-
-        if st.button("Check API", use_container_width=True):
-            try:
-                health = api_get("/health")
-                st.success(f"API status: {health.get('status', 'ok')}")
-            except Exception as exc:
-                st.error(f"API check failed: {exc}")
-
-        if page == "Chat" and st.button("Clear conversation", use_container_width=True):
-            st.session_state["chat_history"] = []
-            st.rerun()
-
     return page
 
 
@@ -260,7 +245,11 @@ def render_documents_page() -> None:
 
 
 def render_chat_page() -> None:
-    st.header("Chat")
+    title_col, action_col = st.columns([1, 0.24])
+    title_col.header("Chat")
+    if action_col.button("Clear conversation", use_container_width=True):
+        st.session_state["chat_history"] = []
+        st.rerun()
 
     if st.session_state["chat_history"]:
         for turn in st.session_state["chat_history"]:
