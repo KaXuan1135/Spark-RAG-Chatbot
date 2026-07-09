@@ -131,10 +131,11 @@ def format_history(history: list[ChatTurn], max_turns: int = 6) -> str:
 
 def build_chat_messages(context_blocks: list[str], question: str, history: list[ChatTurn]) -> list[dict[str, str]]:
     history_text = format_history(history)
-    user_parts = ["Context:\n\n" + "\n\n".join(context_blocks)]
+    user_parts = []
     if history_text:
         user_parts.append("Recent conversation:\n\n" + history_text)
-    user_parts.append(f"Question: {question}")
+    user_parts.append(f"Current question: {question}")
+    user_parts.append("Retrieved context for the current question:\n\n" + "\n\n".join(context_blocks))
     user_parts.append(ANSWER_INSTRUCTIONS)
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
