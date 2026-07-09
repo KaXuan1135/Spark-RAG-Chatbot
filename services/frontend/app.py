@@ -178,171 +178,201 @@ def render_query_debug(debug: dict[str, Any] | None) -> None:
 
 
 
-with st.sidebar:
-    st.subheader("Connection")
-    st.code(API_BASE_URL, language="text")
+def render_sidebar() -> str:
+    with st.sidebar:
+        st.title("Spark RAG")
+        page = st.radio("Page", ["Chat", "Documents"], label_visibility="collapsed")
 
-    if st.button("Check API", use_container_width=True):
-        try:
-            health = api_get("/health")
-            st.success(f"API status: {health.get('status', 'ok')}")
-        except Exception as exc:
-            st.error(f"API check failed: {exc}")
+        st.divider()
+        st.subheader("Connection")
+        st.code(API_BASE_URL, language="text")
 
-    if st.button("Clear conversation", use_container_width=True):
-        st.session_state["chat_history"] = []
-        st.rerun()
+        if st.button("Check API", use_container_width=True):
+            try:
+                health = api_get("/health")
+                st.success(f"API status: {health.get('status', 'ok')}")
+            except Exception as exc:
+                st.error(f"API check failed: {exc}")
 
-    st.divider()
-    st.subheader("Documents")
-    if st.button("Refresh documents", use_container_width=True):
-        st.session_state["refresh_docs"] = True
+        if page == "Chat" and st.button("Clear conversation", use_container_width=True):
+            st.session_state["chat_history"] = []
+            st.rerun()
+
+    return page
+
+
+def render_documents_page() -> None:
+    st.header("Documents")
+
+    upload_notice = st.session_state.pop("upload_notice", None)
+    upload_path = st.session_state.pop("upload_path", "")
+    if upload_notice:
+        st.success(upload_notice)
+        if upload_path:
+            st.caption(upload_path)
 
     try:
         documents = api_get("/documents").get("pdfs", [])
-        if documents:
-            for document in documents:
-                st.write(f"- {document}")
-        else:
-            st.info("No PDFs uploaded yet.")
     except Exception as exc:
         st.warning(f"Could not load documents: {exc}")
+        documents = []
 
-
-upload_col, ingest_col = st.columns([1, 1])
-
-with upload_col:
-    st.subheader("1. Upload PDF")
-    uploaded_file = st.file_uploader("Choose a PDF", type=["pdf"], label_visibility="collapsed")
-    if uploaded_file and st.button("Upload PDF", type="primary", use_container_width=True):
-        try:
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-            result = api_post("/documents", files=files, timeout=120)
-            st.success(f"Uploaded {uploaded_file.name}")
-            st.caption(result.get("path", ""))
-        except Exception as exc:
-            st.error(f"Upload failed: {exc}")
-
-with ingest_col:
-    st.subheader("2. Run Ingestion")
-    st.write("Converts PDFs to Markdown, chunks with Spark, embeds, and indexes into Qdrant.")
-    if st.button("Run ingestion", type="primary", use_container_width=True):
-        with st.spinner("Running Spark ingestion jobs..."):
-            try:
-                result = api_post("/ingest", timeout=600)
-                st.success("Ingestion completed")
-                st.session_state["last_ingest_debug"] = result.get("debug")
-                render_ingest_debug(result.get("debug"))
-                with st.expander("Job output"):
-                    st.text(result.get("detail", ""))
-            except Exception as exc:
-                st.error(f"Ingestion failed: {exc}")
-
-
-st.divider()
-st.subheader("3. Ask A Question")
-
-if st.session_state["chat_history"]:
-    for turn in st.session_state["chat_history"]:
-        with st.chat_message(turn["role"]):
-            st.write(turn["content"])
-
-examples = [
-    "What is this document about?",
-    "What is the annual outpatient medical claim limit for a newly hired engineer in Kuala Lumpur on probation?",
-    "If an employee at Astra Malaysia drives 650 kilometers for an approved corporate business trip, how much reimbursement can they claim?",
-    "Can Malaysian GLC payloads fall back to Anthropic Claude if h100astra is down?",
-    "During an S2 disaster recovery event in Kuala Lumpur, we need to activate our standby server h100backup-02 to host our Tier-1 client inference endpoints. What hardware limitation on this standby server violates our standard GPU deployment policy, and whose approval do we need to bypass this limitation?",
-    "What are the differences in the preemption rules between Tier-2 and Tier-3 workloads on our GPU platform?",
-]
-
-selected = st.selectbox("Example questions", examples)
-question = st.text_area("Message", value=selected, height=100)
-top_k = st.slider("Retrieved chunks", min_value=1, max_value=10, value=5)
-max_tokens = st.slider("Max generated tokens", min_value=32, max_value=4096, value=300, step=32)
-enable_thinking = st.toggle("Enable Qwen thinking mode", value=False, help="Off by default for faster, direct RAG answers. Turn on for harder reasoning questions.")
-
-if st.button("Ask", type="primary", use_container_width=True):
-    if not question.strip():
-        st.warning("Enter a question first.")
+    st.subheader("PDF Documents")
+    if documents:
+        for document in documents:
+            st.write(f"- {document}")
     else:
-        try:
-            payload = {
-                "question": question,
-                "top_k": top_k,
-                "max_tokens": max_tokens,
-                "enable_thinking": enable_thinking,
-                "history": st.session_state["chat_history"],
-            }
-            st.markdown("### Answer")
-            thinking_box = st.empty()
-            answer_box = st.empty()
-            status_box = st.empty()
+        st.info("No PDFs uploaded yet.")
 
-            streamed_answer = ""
-            streamed_reasoning = ""
-            sources = []
-            debug = None
-            ingest_debug = None
-            completed_answer = ""
+    st.divider()
+    upload_col, ingest_col = st.columns([1, 1])
 
-            status_box.caption("Retrieving context...")
-            for message in api_post_stream("/query/stream", json_payload=payload, timeout=300):
-                message_type = message.get("type")
+    with upload_col:
+        st.subheader("Upload PDF")
+        uploaded_file = st.file_uploader("Choose a PDF", type=["pdf"], label_visibility="collapsed")
+        if uploaded_file and st.button("Upload PDF", type="primary", use_container_width=True):
+            try:
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                result = api_post("/documents", files=files, timeout=120)
+                st.session_state["upload_notice"] = f"Uploaded {uploaded_file.name}"
+                st.session_state["upload_path"] = result.get("path", "")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Upload failed: {exc}")
 
-                if message_type == "stage":
-                    stage = message.get("stage", "working")
-                    latency = message.get("latency_ms")
-                    if latency is None:
-                        status_box.caption(stage)
-                    else:
-                        status_box.caption(f"{stage}: {latency} ms")
-                elif message_type == "sources":
-                    sources = message.get("sources", [])
-                    status_box.caption("Generating answer...")
-                elif message_type == "reasoning_delta":
-                    streamed_reasoning += message.get("text", "")
-                    with thinking_box.expander("Thinking process", expanded=False):
-                        st.markdown(streamed_reasoning)
-                elif message_type == "answer_delta":
-                    streamed_answer += message.get("text", "")
-                    thinking, final_answer = split_inline_thinking(streamed_answer, streamed_reasoning or None)
-                    if thinking:
+    with ingest_col:
+        st.subheader("Run Ingestion")
+        st.write("Converts PDFs to Markdown, chunks with Spark, embeds, and indexes into Qdrant.")
+        if st.button("Run ingestion", type="primary", use_container_width=True):
+            with st.spinner("Running Spark ingestion jobs..."):
+                try:
+                    result = api_post("/ingest", timeout=600)
+                    st.success("Ingestion completed")
+                    st.session_state["last_ingest_debug"] = result.get("debug")
+                    render_ingest_debug(result.get("debug"))
+                    with st.expander("Job output"):
+                        st.text(result.get("detail", ""))
+                except Exception as exc:
+                    st.error(f"Ingestion failed: {exc}")
+
+
+def render_chat_page() -> None:
+    st.header("Chat")
+
+    if st.session_state["chat_history"]:
+        for turn in st.session_state["chat_history"]:
+            with st.chat_message(turn["role"]):
+                st.write(turn["content"])
+
+    examples = [
+        "What is this document about?",
+        "What is the annual outpatient medical claim limit for a newly hired engineer in Kuala Lumpur on probation?",
+        "If an employee at Astra Malaysia drives 650 kilometers for an approved corporate business trip, how much reimbursement can they claim?",
+        "Can Malaysian GLC payloads fall back to Anthropic Claude if h100astra is down?",
+        "During an S2 disaster recovery event in Kuala Lumpur, we need to activate our standby server h100backup-02 to host our Tier-1 client inference endpoints. What hardware limitation on this standby server violates our standard GPU deployment policy, and whose approval do we need to bypass this limitation?",
+        "What are the differences in the preemption rules between Tier-2 and Tier-3 workloads on our GPU platform?",
+    ]
+
+    selected = st.selectbox("Example questions", examples)
+    question = st.text_area("Message", value=selected, height=100)
+
+    settings_cols = st.columns([1, 1, 1])
+    top_k = settings_cols[0].number_input("Retrieved chunks", min_value=1, max_value=10, value=5, step=1)
+    max_tokens = settings_cols[1].number_input("Max generated tokens", min_value=32, max_value=4096, value=300, step=32)
+    enable_thinking = settings_cols[2].toggle(
+        "Enable Qwen thinking mode",
+        value=False,
+        help="Off by default for faster, direct RAG answers. Turn on for harder reasoning questions.",
+    )
+
+    if st.button("Ask", type="primary", use_container_width=True):
+        if not question.strip():
+            st.warning("Enter a question first.")
+        else:
+            try:
+                payload = {
+                    "question": question,
+                    "top_k": int(top_k),
+                    "max_tokens": int(max_tokens),
+                    "enable_thinking": enable_thinking,
+                    "history": st.session_state["chat_history"],
+                }
+                st.markdown("### Answer")
+                thinking_box = st.empty()
+                answer_box = st.empty()
+                status_box = st.empty()
+
+                streamed_answer = ""
+                streamed_reasoning = ""
+                sources = []
+                debug = None
+                ingest_debug = None
+                completed_answer = ""
+
+                status_box.caption("Retrieving context...")
+                for message in api_post_stream("/query/stream", json_payload=payload, timeout=300):
+                    message_type = message.get("type")
+
+                    if message_type == "stage":
+                        stage = message.get("stage", "working")
+                        latency = message.get("latency_ms")
+                        if latency is None:
+                            status_box.caption(stage)
+                        else:
+                            status_box.caption(f"{stage}: {latency} ms")
+                    elif message_type == "sources":
+                        sources = message.get("sources", [])
+                        status_box.caption("Generating answer...")
+                    elif message_type == "reasoning_delta":
+                        streamed_reasoning += message.get("text", "")
                         with thinking_box.expander("Thinking process", expanded=False):
-                            st.markdown(thinking)
-                    answer_box.write(final_answer or streamed_answer)
-                elif message_type == "done":
-                    streamed_answer = message.get("answer", streamed_answer)
-                    streamed_reasoning = message.get("reasoning_content") or streamed_reasoning
-                    debug = message.get("debug")
-                    ingest_debug = message.get("ingest_debug")
-                    thinking, final_answer = split_inline_thinking(streamed_answer, streamed_reasoning or None)
-                    if thinking:
-                        with thinking_box.expander("Thinking process", expanded=False):
-                            st.markdown(thinking)
-                    completed_answer = final_answer or streamed_answer
-                    answer_box.write(completed_answer)
-                    status_box.empty()
-                elif message_type == "error":
-                    raise RuntimeError(message.get("detail", "Unknown streaming error"))
+                            st.markdown(streamed_reasoning)
+                    elif message_type == "answer_delta":
+                        streamed_answer += message.get("text", "")
+                        thinking, final_answer = split_inline_thinking(streamed_answer, streamed_reasoning or None)
+                        if thinking:
+                            with thinking_box.expander("Thinking process", expanded=False):
+                                st.markdown(thinking)
+                        answer_box.write(final_answer or streamed_answer)
+                    elif message_type == "done":
+                        streamed_answer = message.get("answer", streamed_answer)
+                        streamed_reasoning = message.get("reasoning_content") or streamed_reasoning
+                        debug = message.get("debug")
+                        ingest_debug = message.get("ingest_debug")
+                        thinking, final_answer = split_inline_thinking(streamed_answer, streamed_reasoning or None)
+                        if thinking:
+                            with thinking_box.expander("Thinking process", expanded=False):
+                                st.markdown(thinking)
+                        completed_answer = final_answer or streamed_answer
+                        answer_box.write(completed_answer)
+                        status_box.empty()
+                    elif message_type == "error":
+                        raise RuntimeError(message.get("detail", "Unknown streaming error"))
 
-            if completed_answer:
-                st.session_state["chat_history"].append({"role": "user", "content": question.strip()})
-                st.session_state["chat_history"].append({"role": "assistant", "content": completed_answer})
+                if completed_answer:
+                    st.session_state["chat_history"].append({"role": "user", "content": question.strip()})
+                    st.session_state["chat_history"].append({"role": "assistant", "content": completed_answer})
 
-            if sources:
-                st.markdown("### Sources")
-                for idx, source in enumerate(sources, start=1):
-                    with st.expander(f"[{idx}] {source.get('source_file', '')} - {source.get('section_title', '')}"):
-                        st.write(source.get("heading_path", ""))
-                        st.caption(f"chunk={source.get('chunk_id', '')} | score={source.get('score')}")
+                if sources:
+                    st.markdown("### Sources")
+                    for idx, source in enumerate(sources, start=1):
+                        with st.expander(f"[{idx}] {source.get('source_file', '')} - {source.get('section_title', '')}"):
+                            st.write(source.get("heading_path", ""))
+                            st.caption(f"chunk={source.get('chunk_id', '')} | score={source.get('score')}")
 
-            with st.expander("Debug Metrics", expanded=True):
-                render_query_debug(debug)
-                last_ingest_debug = ingest_debug or st.session_state.get("last_ingest_debug")
-                if last_ingest_debug:
-                    st.divider()
-                    render_ingest_debug(last_ingest_debug)
-        except Exception as exc:
-            st.error(f"Query failed: {exc}")
-            st.info("If this is an LLM connection error, start SGLang with `docker compose --profile llm up -d sglang`.")
+                with st.expander("Debug Metrics", expanded=True):
+                    render_query_debug(debug)
+                    last_ingest_debug = ingest_debug or st.session_state.get("last_ingest_debug")
+                    if last_ingest_debug:
+                        st.divider()
+                        render_ingest_debug(last_ingest_debug)
+            except Exception as exc:
+                st.error(f"Query failed: {exc}")
+                st.info("If this is an LLM connection error, start SGLang with `docker compose --profile llm up -d sglang`.")
+
+
+page = render_sidebar()
+if page == "Chat":
+    render_chat_page()
+else:
+    render_documents_page()
