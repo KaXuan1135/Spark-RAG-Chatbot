@@ -181,7 +181,10 @@ def render_query_debug(debug: dict[str, Any] | None) -> None:
 def render_sidebar() -> str:
     with st.sidebar:
         st.title("Spark RAG")
-        page = st.radio("Page", ["Chat", "Documents"], label_visibility="collapsed")
+        if hasattr(st, "segmented_control"):
+            page = st.segmented_control("Page", ["Chat", "Documents"], default="Chat", label_visibility="collapsed")
+        else:
+            page = st.radio("Page", ["Chat", "Documents"], label_visibility="collapsed")
 
         st.divider()
         st.subheader("Connection")
