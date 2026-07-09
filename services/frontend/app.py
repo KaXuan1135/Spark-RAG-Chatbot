@@ -15,6 +15,26 @@ st.set_page_config(page_title="Spark SGLang RAG", page_icon="", layout="wide")
 st.title("Spark + SGLang RAG")
 st.caption("Upload PDFs, run the Spark ingestion pipeline, and query the indexed documents.")
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetric"] {
+        padding: 0.1rem 0;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.72rem;
+        line-height: 1.1;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.05rem;
+        line-height: 1.15;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
