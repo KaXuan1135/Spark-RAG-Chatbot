@@ -116,30 +116,30 @@ class QueryResponse(BaseModel):
     ingest_debug: IngestDebug | None = None
 
 
-def format_history(history: list[ChatTurn], max_turns: int = 6) -> str:
+def format_history_messages(history: list[ChatTurn], max_turns: int = 6) -> list[dict[str, str]]:
     allowed_roles = {"user", "assistant"}
-    lines = []
+    messages: list[dict[str, str]] = []
     for turn in history[-max_turns:]:
         role = turn.role.lower().strip()
         content = turn.content.strip()
         if role not in allowed_roles or not content:
             continue
-        label = "User" if role == "user" else "Assistant"
-        lines.append(f"{label}: {content}")
-    return "\n".join(lines)
+        messages.append({"role": role, "content": content})
+    return messages
 
 
 def build_chat_messages(context_blocks: list[str], question: str, history: list[ChatTurn]) -> list[dict[str, str]]:
-    history_text = format_history(history)
-    user_parts = []
-    if history_text:
-        user_parts.append("Recent conversation:\n\n" + history_text)
-    user_parts.append(f"Current question: {question}")
-    user_parts.append("Retrieved context for the current question:\n\n" + "\n\n".join(context_blocks))
-    user_parts.append(ANSWER_INSTRUCTIONS)
+    current_turn = "\n\n".join(
+        [
+            f"Current question:\n{question}",
+            "Retrieved context for the current question:\n\n" + "\n\n".join(context_blocks),
+            ANSWER_INSTRUCTIONS,
+        ]
+    )
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": "\n\n".join(user_parts)},
+        *format_history_messages(history),
+        {"role": "user", "content": current_turn},
     ]
 
 
